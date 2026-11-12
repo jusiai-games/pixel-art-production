@@ -9,7 +9,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from PIL import Image, ImageDraw
-from style_review import load_style, review_frame, write_face_preview, write_preview
+from style_review import load_style, review_frame, rgb, write_face_preview, write_preview
+from transition_review import compare_transition, transition_limits, transition_preview
 
 
 DIRECTIONS = ("down", "left", "right", "up")
@@ -356,6 +357,69 @@ def review(args):
     print(f"{args.out}: {len(report)} candidate frames, {warnings} with style warnings")
 
 
+def review_transitions(args):
+    data = json.loads(args.map.read_text(encoding="utf-8-sig"))
+    if not isinstance(data, dict) or not isinstance(data.get("edges"), list) or not data["edges"]:
+        raise ValueError("transition map requires a nonempty edges array")
+    if not isinstance(data.get("palette"), str) or not data["palette"]:
+        raise ValueError("transition map requires a shared body palette path")
+    allowed = palette(args.map.parent / data["palette"])
+    color_sets = {}
+    for key in ("effect_colors", "outline_colors"):
+        values = data.get(key, [])
+        if not isinstance(values, list):
+            raise ValueError(f"{key} must be an array of HEX colors")
+        color_sets[key] = {rgb(value) for value in values}
+    effects, outline = color_sets["effect_colors"], color_sets["outline_colors"]
+    if effects & allowed or outline - allowed:
+        raise ValueError("effect colors must be separate from the body palette and outline colors must belong to it")
+    default_limits = transition_limits(data.get("limits", {}))
+    report, seen = [], set()
+    with new_directory(args.out) as stage:
+        for edge in data["edges"]:
+            if not isinstance(edge, dict) or not slug(edge.get("id")) or edge["id"] in seen:
+                raise ValueError("transition edges require unique lowercase IDs")
+            edge_id = edge["id"]
+            seen.add(edge_id)
+            mode = edge.get("mode", "pose")
+            if mode not in ("exact", "pose"):
+                raise ValueError(f"{edge_id}: expected mode exact or pose")
+            endpoints = [edge.get(key) for key in ("from", "to")]
+            if any(not isinstance(value, str) or Path(value).suffix.lower() != ".png" for value in endpoints):
+                raise ValueError(f"{edge_id}: from and to must be frame PNG paths")
+            paths = [args.map.parent / value for value in endpoints]
+            cell, _ = profile("character", args.map, args.out, *paths)
+            images = []
+            violations = {}
+            for role, path in zip(("from", "to"), paths):
+                frame = load_png(path)
+                check(frame, path, "character", size=(cell, cell))
+                frame = canonical(frame)
+                visible = {pixel[:3] for _, pixel in frame.getcolors(cell * cell) if pixel[3]}
+                outside = visible - allowed - effects
+                if outside:
+                    violations[role] = ["#%02X%02X%02X" % color for color in sorted(outside)]
+                images.append(frame)
+            limits = {**default_limits, **transition_limits(edge.get("limits", {}))}
+            result, gaps = compare_transition(*images, mode, effects, outline, limits)
+            if violations:
+                result["failures"].append("palette_violation")
+            preview = f"{edge_id}.png"
+            write_frame(transition_preview(*images, gaps), stage / preview)
+            report.append({"id": edge_id, "from": endpoints[0], "to": endpoints[1],
+                           "mode": mode, "limits": limits, "preview": preview,
+                           "off_palette": violations, **result})
+        failed = sum(bool(edge["failures"]) for edge in report)
+        warned = sum(bool(edge["warnings"]) for edge in report)
+        (stage / "report.json").write_text(
+            json.dumps({"failed": failed, "warned": warned, "edges": report}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    print(f"{args.out}: {len(report)} transitions, {failed} failed, {warned} with warnings")
+    if failed:
+        raise SystemExit(1)
+
+
 def assemble(args):
     kind, name, cell, pivot, columns, rows, names, colors = manifest(args.manifest, args.frames, args.out)
     check_frame_files(args.frames, names)
@@ -454,6 +518,11 @@ def main():
     cmd.add_argument("out", type=Path)
     cmd.add_argument("--face-box", type=nonnegative, nargs=4, metavar=("X", "Y", "W", "H"))
     cmd.set_defaults(run=review)
+
+    cmd = commands.add_parser("review-transitions", help="Check frame boundaries from an animation state map.")
+    cmd.add_argument("map", type=Path)
+    cmd.add_argument("out", type=Path)
+    cmd.set_defaults(run=review_transitions)
 
     cmd = commands.add_parser("assemble", help="Build a sheet and Unity metadata.")
     cmd.add_argument("manifest", type=Path)

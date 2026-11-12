@@ -93,6 +93,55 @@ Copy-Item "$run/review/frames" "$game/approved/hero_idle"
 
 피벗 표기는 좌상단 원점 픽셀 경계 좌표다. 모든 프로필은 32 PPU다. 캐릭터의 `columns`는 방향당 프레임 수의 약수로 지정하며 기본값은 방향당 프레임 수다. 팔레트 경로는 매니페스트 기준이다. CLI 옵션은 `--help`와 각 명령의 `--help`에서 볼 수 있다.
 
+## 상태 전환 검수
+
+캐릭터 애니메이션을 만들거나 수정할 때 먼저 게임에서 어떤 상태로 들어오고 어디로 나가는지 확인한다. 이미 합의한 전환, 작업 명세나 실제 재생 키에 있는 정보를 사용한다. 사용자 피드백이나 미리보기에서 어느 동작 사이인지, 피격이 어느 시점인지, 도착 클립이 어느 프레임에서 시작하는지 불분명하면 필요한 내용을 사용자에게 묻는다. 확인된 전환을 게임 폴더의 상태 전환 맵에 기록하고 이후 수정 시 함께 갱신한다.
+
+맵의 각 연결에는 이름과 실제로 이어지는 두 개의 개별 PNG를 지정한다. 같은 상태라도 일반 종료와 중도 피격은 별도 연결이다. 여러 프레임에서 중단될 수 있으면 검사할 대표 시점을 각각 추가한다. 쓰러지는 중간처럼 큰 자세 변화가 검수 대상이면 동작 내부의 프레임 쌍도 등록할 수 있다.
+
+예를 들어 게임 폴더에 `wizard-state-transitions.json`을 두고 다음처럼 작성한다. PNG와 팔레트 경로는 맵 파일을 기준으로 한다.
+
+```json
+{
+  "palette": "palettes/wizard_shared.json",
+  "effect_colors": ["#78CBF4", "#ADE9FF", "#F0FCFF"],
+  "outline_colors": ["#201B2D", "#222034", "#28283F"],
+  "limits": {
+    "min_overlap": 0.4,
+    "max_color_shift": 0.35,
+    "min_outline_coverage": 0.7,
+    "max_cluster_shift": 0.16,
+    "max_contact_shift": 2
+  },
+  "edges": [
+    {
+      "id": "idle_to_cast",
+      "from": "work/idle/review/frames/hero_idle_right_00.png",
+      "to": "work/cast/review/frames/hero_cast_right_00.png",
+      "mode": "exact"
+    },
+    {
+      "id": "cast_peak_to_fall",
+      "from": "work/cast/review/frames/hero_cast_right_06.png",
+      "to": "work/fall/review/frames/hero_fall_right_02.png",
+      "mode": "pose",
+      "limits": { "min_overlap": 0.3 }
+    }
+  ]
+}
+```
+
+개별 프레임의 `review`를 마치면 전환 검사를 실행한다. 수정한 동작이 맵의 다른 동작에도 연결되면 해당 연결까지 다시 검사한다.
+
+```powershell
+& $py $tool review-transitions "$game/wizard-state-transitions.json" "$game/work/wizard-transitions-01"
+```
+
+- 허용 색 위반과 `exact` 경계의 픽셀 불일치는 실패다. 색 위반과 정확 일치 실패는 결과를 기록한 뒤 종료 코드 1을 반환한다. 크기나 알파 규격에 맞지 않는 입력은 오류로 중단한다.
+- 실루엣 겹침, 몸체 색 분포, 외곽선 커버리지, 같은 색 인접 픽셀 비율, 최하단 불투명 픽셀 높이는 지정한 기준을 벗어나면 경고다. 전용 이펙트 색은 몸체 통계에서 제외한다. 맵 전체의 기준을 연결별 `limits`로 조정할 수 있다.
+- `report.json`과 연결별 4배 PNG를 확인한다. 차이 패널에서 주황은 색이 바뀐 픽셀, 분홍은 사라진 픽셀, 하늘색은 새 픽셀이다. 마지막 패널의 주황은 도착 프레임의 외곽에서 윤곽선 색이 아닌 위치다.
+- 경고는 해당 자세에서 변화가 의도된 것인지 확인하는 데 쓴다. 픽셀 통계는 모자나 망토를 자동 식별하지 않으므로, 자세별 임계값은 기준 포즈와 문제가 있었던 이전 시트를 비교해 정하고 실제 배율에서 연결을 재생해 확인한다. 실패를 수정하고 경고를 검토한 뒤 시트를 승인한다.
+
 ## 아트 방향 변경
 
 - **개별 에셋 수정**은 해당 작업 명세와 마지막 승인 PNG를 기준으로 시작한다. 게임 전체 설정을 유지하고 새 후보를 별도 시도로 저장한다. 사용자가 수정 결과를 채택하면 작업 명세와 최종 PNG 경로를 갱신한다.
