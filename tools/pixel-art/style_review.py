@@ -161,6 +161,31 @@ def review_frame(image, style):
     }
 
 
+def write_face_preview(path, frame, box, background):
+    x, y, width, height = box
+    zoom = 8
+    top = 20
+    left = frame.width + 22
+    preview = Image.new("RGB", (max(145, left + width * zoom + 6),
+                                top + max(frame.height, height * zoom) + 6), "#242633")
+    draw = ImageDraw.Draw(preview)
+    draw.text((6, 4), "1x", fill="#ECEAF2")
+    draw.text((left, 4), "Face 8x", fill="#ECEAF2")
+    tile = Image.new("RGB", frame.size, background)
+    tile.paste(frame, (0, 0), frame)
+    preview.paste(tile, (6, top))
+    face = tile.crop((x, y, x + width, y + height))
+    face = face.resize((width * zoom, height * zoom), Image.Resampling.NEAREST)
+    preview.paste(face, (left, top))
+    for col in range(1, width):
+        px = left + col * zoom
+        draw.line((px, top, px, top + face.height - 1), fill="#383B4B")
+    for row in range(1, height):
+        py = top + row * zoom
+        draw.line((left, py, left + face.width - 1, py), fill="#383B4B")
+    preview.save(path)
+
+
 def write_preview(folder, page, pairs, background, pivot):
     cell = pairs[0][1].width
     size = cell * 3

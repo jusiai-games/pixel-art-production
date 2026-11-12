@@ -8,8 +8,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from PIL import Image
-from style_review import load_style, review_frame, write_preview
+from PIL import Image, ImageDraw
+from style_review import load_style, review_frame, write_face_preview, write_preview
 
 
 DIRECTIONS = ("down", "left", "right", "up")
@@ -176,6 +176,48 @@ def validate(args):
         print(f"{path}: {image.width}x{image.height}, content box={box}")
 
 
+def inspect_grid(args):
+    image = load_png(args.png)
+    scale = args.scale
+    ox, oy = args.origin
+    if ox >= scale or oy >= scale or scale < 2:
+        raise ValueError("grid scale must be at least 2 and each origin offset must be below scale")
+    alpha = image.getchannel("A")
+    pixels = image.load()
+    overlay = ImageDraw.Draw(image)
+    mixed = []
+    # Include partial cells along the canvas edge when the grid has an offset.
+    for y in range(oy - scale if oy else 0, image.height, scale):
+        for x in range(ox - scale if ox else 0, image.width, scale):
+            left, top = max(0, x), max(0, y)
+            right, bottom = min(x + scale, image.width), min(y + scale, image.height)
+            first = pixels[left, top]
+            if all(
+                pixel == first or (pixel[3] == first[3] == 0)
+                for row in range(top, bottom)
+                for col in range(left, right)
+                for pixel in (pixels[col, row],)
+            ):
+                continue
+            mixed.append([left, top, right, bottom])
+    for left, top, right, bottom in mixed:
+        overlay.rectangle((left, top, right - 1, bottom - 1), outline="#FF4D68")
+    partial_alpha = sum(alpha.histogram()[1:255])
+    aligned = not (ox or oy or image.width % scale or image.height % scale)
+    report = {
+        "source": str(args.png), "size": image.size,
+        "scale": scale, "origin": args.origin,
+        "canvas_aligned": aligned, "partial_alpha_pixels": partial_alpha,
+        "grid_matches": aligned and not mixed and not partial_alpha,
+        "nonuniform_cells": mixed,
+    }
+    with new_directory(args.out) as stage:
+        write_frame(image, stage / "grid.png")
+        (stage / "report.json").write_text(json.dumps(report) + "\n", encoding="utf-8")
+    print(f"{args.out}: {len(mixed)} nonuniform cells, {partial_alpha} partial-alpha pixels, "
+          f"canvas aligned: {aligned}")
+
+
 def normalize(args):
     cell, target_anchor = PROFILES[args.kind]
     colors = palette(args.palette) if args.palette else None
@@ -240,6 +282,10 @@ def check_frame_files(folder, names):
 
 def review(args):
     kind, name, cell, pivot, _, _, names, colors = manifest(args.manifest)
+    if args.face_box:
+        x, y, width, height = args.face_box
+        if kind != "character" or not width or not height or x + width > cell or y + height > cell:
+            raise ValueError("face box must have positive dimensions and fit inside a character frame")
     check_frame_files(args.frames, names)
     style = load_style(args.style, colors)
     report, preview = [], []
@@ -251,6 +297,8 @@ def review(args):
             after, metrics = review_frame(canonical(before), style)
             check(after, f"{frame} after style review", kind, colors, (cell, cell))
             write_frame(after, stage / "frames" / path.name)
+            if args.face_box:
+                write_face_preview(stage / f"{frame}-face.png", after, args.face_box, style.background)
             report.append({"name": frame, **metrics})
             preview.append((index, before, after, bool(metrics["warnings"])))
             if len(preview) == 16 or index == len(names) - 1:
@@ -324,6 +372,13 @@ def main():
     cmd.add_argument("--size", type=positive, nargs=2)
     cmd.set_defaults(run=validate)
 
+    cmd = commands.add_parser("inspect-grid", help="Mark nonuniform cells in an enlarged source PNG.")
+    cmd.add_argument("png", type=Path)
+    cmd.add_argument("out", type=Path)
+    cmd.add_argument("--scale", type=positive, required=True)
+    cmd.add_argument("--origin", type=nonnegative, nargs=2, default=(0, 0), metavar=("X", "Y"))
+    cmd.set_defaults(run=inspect_grid)
+
     cmd = commands.add_parser("normalize", help="Normalize one PNG to the profile canvas.")
     cmd.add_argument("png", type=Path)
     cmd.add_argument("out", type=Path)
@@ -348,6 +403,7 @@ def main():
     cmd.add_argument("style", type=Path)
     cmd.add_argument("frames", type=Path)
     cmd.add_argument("out", type=Path)
+    cmd.add_argument("--face-box", type=nonnegative, nargs=4, metavar=("X", "Y", "W", "H"))
     cmd.set_defaults(run=review)
 
     cmd = commands.add_parser("assemble", help="Build a sheet and Unity metadata.")
