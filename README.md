@@ -1,6 +1,6 @@
 # Pixel Art Production
 
-게임마다 클론해서 쓰는 32×32 픽셀 아트 제작 도구다. ChatGPT Work, Codex 또는 Claude Code에서 이 폴더를 열고 “32×32 마법사 스프라이트를 만들어줘”라고 요청하면 [첫 요청 인터뷰](docs/pipeline.md#첫-요청-인터뷰)부터 시작한다. 자동으로 지침을 읽지 않는 환경에서는 `AGENTS.md`를 먼저 읽으라고 요청한다.
+게임마다 클론해서 쓰는 픽셀 아트 제작 도구다. ChatGPT Work, Codex 또는 Claude Code에서 이 폴더를 열고 “마법사 스프라이트를 만들어줘”라고 요청하면 [첫 요청 인터뷰](docs/pipeline.md#첫-요청-인터뷰)에서 캐릭터 프레임을 정한다. 자동으로 지침을 읽지 않는 환경에서는 `AGENTS.md`를 먼저 읽으라고 요청한다.
 
 이미지 생성 도구와 Python으로 PNG를 만든다. Unity 자동 분할이 필요할 때는 [Unity 임포터](docs/unity-import.md)를 게임 프로젝트에 추가할 수 있다.
 

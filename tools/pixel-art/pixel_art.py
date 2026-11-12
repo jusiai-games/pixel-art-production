@@ -20,6 +20,43 @@ PROFILES = {
 }
 MAX_SHEET = 2048
 MAX_SOURCE_PIXELS = 4096 * 4096
+CHARACTER_SIZES = (16, 24, 32, 48, 64)
+FRAME_CONFIG = "character-frame.json"
+
+
+def profile(kind, *paths, legacy_default=True):
+    if kind != "character":
+        return PROFILES[kind]
+    configs = set()
+    for path in paths:
+        for directory in path.resolve().parents:
+            config = directory / FRAME_CONFIG
+            if config.exists():
+                configs.add(config)
+    if len(configs) > 1:
+        raise ValueError("paths span multiple character frame configurations")
+    if not configs:
+        return PROFILES[kind] if legacy_default else None
+    config = configs.pop()
+    data = json.loads(config.read_text(encoding="utf-8-sig"))
+    if not isinstance(data, dict) or type(data.get("size")) is not int or data["size"] not in CHARACTER_SIZES:
+        raise ValueError(f"{config}: expected character size in {CHARACTER_SIZES}")
+    cell = data["size"]
+    return cell, (cell // 2, cell * 7 // 8)
+
+
+def lock_character_frame(args):
+    if not (args.directory / "art-direction.md").is_file():
+        raise ValueError("initialize the game workspace before locking its character frame")
+    target = args.directory / FRAME_CONFIG
+    if target.exists():
+        cell, _ = profile("character", target)
+        if cell != args.character_size:
+            raise ValueError(f"{target}: character frame is already locked to {cell}x{cell}")
+    else:
+        with target.open("x", encoding="utf-8") as stream:
+            stream.write(json.dumps({"size": args.character_size}) + "\n")
+    print(f"{target}: {args.character_size}x{args.character_size}")
 
 
 def slug(value):
@@ -81,7 +118,7 @@ def canonical(image):
     return clean
 
 
-def manifest(path):
+def manifest(path, *workspace_paths):
     data = json.loads(path.read_text(encoding="utf-8-sig"))
     if not isinstance(data, dict) or data.get("kind") not in tuple(PROFILES) or not slug(data.get("name")):
         raise ValueError(f"{path}: expected kind (character/tile32/tile) and lowercase name")
@@ -107,7 +144,7 @@ def manifest(path):
         if len(set(tiles)) != len(tiles) or type(columns) is not int or not 1 <= columns <= len(tiles):
             raise ValueError(f"{path}: duplicate tile IDs or invalid column count")
         names = [f"{name}_{tile}" for tile in tiles]
-    cell, pivot = PROFILES[kind]
+    cell, pivot = profile(kind, path, *workspace_paths)
     rows = (len(names) + columns - 1) // columns
     if max(columns, rows) * cell > MAX_SHEET:
         raise ValueError(f"{path}: assembled sheet exceeds {MAX_SHEET}px on an axis")
@@ -172,7 +209,14 @@ def validate(args):
     colors = palette(args.palette) if args.palette else None
     for path in args.png:
         image = load_png(path)
-        box = check(image, path, args.kind, colors, args.size)
+        size = args.size
+        configured = profile("character", path, legacy_default=False) if args.kind == "character" else None
+        if configured:
+            cell, _ = configured
+            if size and size != (cell, cell):
+                raise ValueError(f"{path}: character frame requires {cell}x{cell}")
+            size = (cell, cell)
+        box = check(image, path, args.kind, colors, size)
         print(f"{path}: {image.width}x{image.height}, content box={box}")
 
 
@@ -219,7 +263,7 @@ def inspect_grid(args):
 
 
 def normalize(args):
-    cell, target_anchor = PROFILES[args.kind]
+    cell, target_anchor = profile(args.kind, args.png, args.out)
     colors = palette(args.palette) if args.palette else None
     image = load_png(args.png)
     check(image, args.png, args.kind, colors)
@@ -251,7 +295,7 @@ def normalize(args):
 
 
 def split(args):
-    kind, _, cell, _, columns, rows, names, colors = manifest(args.manifest)
+    kind, _, cell, _, columns, rows, names, colors = manifest(args.manifest, args.png, args.out)
     if args.defer_palette:
         colors = None
     cell *= args.scale
@@ -281,7 +325,7 @@ def check_frame_files(folder, names):
 
 
 def review(args):
-    kind, name, cell, pivot, _, _, names, colors = manifest(args.manifest)
+    kind, name, cell, pivot, _, _, names, colors = manifest(args.manifest, args.frames, args.out)
     if args.face_box:
         x, y, width, height = args.face_box
         if kind != "character" or not width or not height or x + width > cell or y + height > cell:
@@ -313,7 +357,7 @@ def review(args):
 
 
 def assemble(args):
-    kind, name, cell, pivot, columns, rows, names, colors = manifest(args.manifest)
+    kind, name, cell, pivot, columns, rows, names, colors = manifest(args.manifest, args.frames, args.out)
     check_frame_files(args.frames, names)
     width, height = columns * cell, rows * cell
     sheet = Image.new("RGBA", (width, height))
@@ -359,6 +403,11 @@ def main():
     cmd = commands.add_parser("init", help="Create a local game workspace from templates.")
     cmd.add_argument("directory", type=Path)
     cmd.set_defaults(run=init_project)
+
+    cmd = commands.add_parser("lock-character-frame", help="Set the game-wide character cell once.")
+    cmd.add_argument("directory", type=Path)
+    cmd.add_argument("character_size", type=int, choices=CHARACTER_SIZES, metavar="size")
+    cmd.set_defaults(run=lock_character_frame)
 
     cmd = commands.add_parser("swatch", help="Render a palette PNG for image-generation input.")
     cmd.add_argument("palette", type=Path)

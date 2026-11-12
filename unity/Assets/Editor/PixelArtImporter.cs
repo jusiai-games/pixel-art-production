@@ -75,7 +75,9 @@ namespace PixelArtProduction.Editor
                 throw new InvalidDataException("Invalid sheet schema.");
 
             var character = sheet.kind == "character";
-            var cell = sheet.kind == "tile" ? 16 : 32;
+            var cell = character ? sheet.cell : sheet.kind == "tile" ? 16 : 32;
+            if (character && cell != 16 && cell != 24 && cell != 32 && cell != 48 && cell != 64)
+                throw new InvalidDataException("Unsupported character cell size.");
             if ((!character && sheet.kind != "tile" && sheet.kind != "tile32") || sheet.cell != cell ||
                 sheet.width < cell || sheet.width > 2048 || sheet.width % cell != 0 ||
                 sheet.height < cell || sheet.height > 2048 || sheet.height % cell != 0 ||
