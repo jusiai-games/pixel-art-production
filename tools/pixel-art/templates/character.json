@@ -1,0 +1,7 @@
+{
+  "kind": "character",
+  "name": "hero_idle",
+  "frames_per_direction": 1,
+  "directions": ["down"],
+  "palette": "../palettes/project.json"
+}
