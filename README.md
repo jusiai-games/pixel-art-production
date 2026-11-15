@@ -16,6 +16,7 @@ $py = './.venv/Scripts/python.exe'
 Python 3.10 이상이 필요하다. macOS/Linux에서는 `python3 -m venv .venv`와 `./.venv/bin/python`을 사용한다.
 
 - [첫 인터뷰부터 PNG 완성까지](docs/pipeline.md)
+- [PNG 레퍼런스에서 색감을 골라 캐릭터 생성에 적용하기](docs/color-style.md)
 - [AI 작업 지침](AGENTS.md)
 - [클론 운영과 공용 도구 업데이트](docs/git-workflow.md)
 

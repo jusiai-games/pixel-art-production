@@ -4,11 +4,13 @@ import json
 import re
 import shutil
 import sys
+from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from PIL import Image, ImageDraw
+import color_style
 from style_review import load_style, review_frame, rgb, write_face_preview, write_preview
 from transition_review import compare_transition, transition_limits, transition_preview
 
@@ -205,6 +207,131 @@ def swatch(args):
     print(f"{args.out}: {len(colors)} color swatches")
 
 
+def color_scan(args):
+    selection = color_style.crop(load_png(args.png), args.crop)
+    counts, alpha = color_style.histogram(selection)
+    rows = color_style.palette_rows(counts)
+    with new_directory(args.out) as stage:
+        report = {"source": str(args.png), "crop": args.crop, "alpha": alpha, "palette": rows,
+                  "metrics": color_style.measure(counts)[0] if counts else None}
+        color_style.write_json(stage / "report.json", report)
+        color_style.swatch_report(stage, [(args.png.stem, rows)])
+        write_frame(selection, stage / "selection.png")
+    print(f"{args.out}: {len(rows)} opaque colors")
+
+
+def color_build(args):
+    config = color_style.read_json(args.config)
+    entries = config.get("references") if isinstance(config, dict) else None
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("expected a nonempty references array")
+    references, groups = [], []
+    ids, selections = set(), set()
+    for entry in entries:
+        if not isinstance(entry, dict) or not slug(entry.get("id")) or entry.get("role") not in color_style.ROLES:
+            raise ValueError("each reference needs a lowercase asset id and a valid role")
+        name, role, source = entry["id"], entry["role"], entry.get("png")
+        if name in ids or not isinstance(source, str) or not source:
+            raise ValueError(f"{name}: expected a unique asset id and PNG path")
+        ids.add(name)
+        path = args.config.parent / source
+        region = entry.get("crop")
+        selected = color_style.crop(load_png(path), region)
+        selection = (path.resolve(), tuple(region or (0, 0, *selected.size)))
+        if selection in selections:
+            raise ValueError(f"{name}: duplicate PNG selection")
+        selections.add(selection)
+        counts, alpha = color_style.histogram(selected)
+        ignore, ramps = entry.get("ignoreColors", []), entry.get("ramps", {})
+        if not isinstance(ignore, list) or not isinstance(ramps, dict):
+            raise ValueError(f"{name}: expected an ignoreColors array and ramps object")
+        for value in ignore:
+            counts.pop(rgb(value), None)
+        metrics, ramp_data = color_style.measure(counts, ramps)
+        references.append({**entry, "alpha": alpha, "metrics": metrics, "ramps": ramp_data})
+        groups.append((name, color_style.palette_rows(counts)))
+    built = color_style.summarize(references)
+    with new_directory(args.out) as stage:
+        color_style.write_json(stage / "profile.json", built)
+        color_style.swatch_report(stage, groups)
+        for role, group in built["roles"].items():
+            if group["referenceCount"]:
+                (stage / f"{role}-prompt.md").write_text(color_style.prompt_guide(built, role), encoding="utf-8")
+    print(f"{args.out}: {len(references)} reference assets")
+
+
+def color_candidate(args):
+    group = color_style.load_role(args.profile, args.role)
+    images, counts, alpha = {}, Counter(), Counter()
+    for path in args.png:
+        if path.name in images:
+            raise ValueError("candidate PNG filenames must be distinct")
+        image = load_png(path)
+        images[path.name] = image
+        colors, opacity = color_style.histogram(image)
+        counts.update(colors)
+        alpha.update(opacity)
+    for value in args.ignore_color:
+        counts.pop(rgb(value), None)
+    ramps = color_style.read_json(args.ramps) if args.ramps else {}
+    if not isinstance(ramps, dict):
+        raise ValueError("expected a JSON object of material ramps")
+    metrics, ramp_metrics = color_style.measure(counts, ramps)
+    before = color_style.palette_rows(counts)
+    report = {"role": args.role, "inputs": [str(path) for path in args.png], "alpha": dict(alpha),
+              "ignoredColors": args.ignore_color, "palette": before, "ramps": ramp_metrics,
+              "comparison": color_style.compare(metrics, group)}
+    swatches = [("Candidate", before)]
+    with new_directory(args.out) as stage:
+        if args.suggest:
+            mapping, strength = color_style.suggest_mapping(counts, metrics, group)
+            new_counts = {mapping[color]: count for color, count in counts.items()}
+            after = color_style.palette_rows(new_counts)
+            mapped_ramps = {key: [color_style.hex_color(mapping[rgb(value)]) for value in values]
+                            for key, values in ramps.items()}
+            suggested_metrics, suggested_ramps = color_style.measure(new_counts, mapped_ramps)
+            report.update({
+                "suggestion": "improved" if strength else "no_improvement",
+                "strength": strength,
+                "mapping": {color_style.hex_color(color): color_style.hex_color(mapping[color]) for color in counts},
+                "suggestedRamps": suggested_ramps,
+                "suggestedComparison": color_style.compare(suggested_metrics, group),
+            })
+            swatches.append(("Suggested", after))
+            for index, (filename, image) in enumerate(images.items()):
+                corrected = color_style.recolor(image, mapping)
+                write_frame(corrected, stage / "frames" / filename)
+                if index == 0:
+                    write_frame(color_style.recolor_preview(image, corrected), stage / "preview.png")
+        color_style.write_json(stage / "report.json", report)
+        color_style.swatch_report(stage, swatches)
+    print(f"{args.out}: {args.role} color score {report['comparison']['score']}")
+
+
+def color_ramp(args):
+    profile_data = color_style.read_json(args.profile)
+    references = profile_data.get("references") if isinstance(profile_data, dict) else None
+    if not isinstance(references, list):
+        raise ValueError("profile has no reference list")
+    for reference in references:
+        if not isinstance(reference, dict) or reference.get("id") != args.reference or reference.get("role") != args.role:
+            continue
+        ramps = reference.get("ramps")
+        ramp = ramps.get(args.material) if isinstance(ramps, dict) else None
+        if isinstance(ramp, dict) and isinstance(ramp.get("colors"), list):
+            break
+    else:
+        raise ValueError("reference material ramp was not found for this role")
+    samples = [rgb(value) for value in ramp["colors"]]
+    colors = color_style.transfer_ramp(samples, rgb(args.base))
+    values = [color_style.hex_color(color) for color in colors]
+    rows = {row["hex"]: row for row in color_style.palette_rows(dict.fromkeys(colors, 1))}
+    with new_directory(args.out) as stage:
+        color_style.write_json(stage / "palette.json", values)
+        color_style.swatch_report(stage, [(args.material, [rows[value] for value in values])])
+    print(f"{args.out}: proposed dark-to-light ramp {' '.join(values)}")
+
+
 
 def validate(args):
     colors = palette(args.palette) if args.palette else None
@@ -333,6 +460,13 @@ def review(args):
             raise ValueError("face box must have positive dimensions and fit inside a character frame")
     check_frame_files(args.frames, names)
     style = load_style(args.style, colors)
+    if args.color_profile and kind != "character":
+        raise ValueError("review --color-profile requires a character manifest")
+    color_group = color_style.load_role(args.color_profile, "character") if args.color_profile else None
+    ignore = {rgb(value) for value in args.color_ignore}
+    if ignore and color_group is None:
+        raise ValueError("--color-ignore requires --color-profile")
+    color_counts = Counter()
     report, preview = [], []
     with new_directory(args.out) as stage:
         for index, frame in enumerate(names):
@@ -341,6 +475,8 @@ def review(args):
             check(before, path, kind, size=(cell, cell))
             after, metrics = review_frame(canonical(before), style)
             check(after, f"{frame} after style review", kind, colors, (cell, cell))
+            if color_group is not None:
+                color_counts.update(color_style.histogram(after)[0])
             write_frame(after, stage / "frames" / path.name)
             if args.face_box:
                 write_face_preview(stage / f"{frame}-face.png", after, args.face_box, style.background)
@@ -350,9 +486,14 @@ def review(args):
                 write_preview(stage, index // 16 + 1, preview, style.background,
                               pivot if kind == "character" else None)
                 preview.clear()
-        (stage / "report.json").write_text(
-            json.dumps({"sheet": name, "frames": report}, indent=2) + "\n", encoding="utf-8"
-        )
+        result = {"sheet": name, "frames": report}
+        if color_group is not None:
+            for color in ignore:
+                color_counts.pop(color, None)
+            comparison = color_style.compare(color_style.measure(color_counts)[0], color_group)
+            result["colorStyle"] = {"profile": str(args.color_profile), "ignoredColors": args.color_ignore,
+                                    **comparison}
+        color_style.write_json(stage / "report.json", result)
     warnings = sum(bool(frame["warnings"]) for frame in report)
     print(f"{args.out}: {len(report)} candidate frames, {warnings} with style warnings")
 
@@ -478,6 +619,38 @@ def main():
     cmd.add_argument("out", type=Path)
     cmd.set_defaults(run=swatch)
 
+    cmd = commands.add_parser("color-scan", help="Extract exact opaque colors from a reference PNG or crop.")
+    cmd.add_argument("png", type=Path)
+    cmd.add_argument("out", type=Path)
+    cmd.add_argument("--crop", type=int, nargs=4, metavar=("X", "Y", "W", "H"))
+    cmd.set_defaults(run=color_scan)
+
+    cmd = commands.add_parser("color-build", help="Build a role-based OKLCH profile and generation guides.")
+    cmd.add_argument("config", type=Path)
+    cmd.add_argument("out", type=Path)
+    cmd.set_defaults(run=color_build)
+
+    cmd = commands.add_parser("color-ramp", help="Transfer a selected material ramp to a new sRGB base color.")
+    cmd.add_argument("profile", type=Path)
+    cmd.add_argument("out", type=Path)
+    cmd.add_argument("--role", choices=color_style.ROLES, default="character")
+    cmd.add_argument("--reference", required=True)
+    cmd.add_argument("--material", required=True)
+    cmd.add_argument("--base", required=True, help="The new base color as #RRGGBB.")
+    cmd.set_defaults(run=color_ramp)
+
+    for command, suggest in (("color-check", False), ("color-suggest", True)):
+        help_text = ("Propose a shared color map for one asset or animation."
+                     if suggest else "Compare one asset or animation with a reference profile.")
+        cmd = commands.add_parser(command, help=help_text)
+        cmd.add_argument("png", type=Path, nargs="+")
+        cmd.add_argument("--out", type=Path, required=True)
+        cmd.add_argument("--profile", type=Path, required=True)
+        cmd.add_argument("--role", choices=color_style.ROLES, required=True)
+        cmd.add_argument("--ignore-color", action="append", default=[])
+        cmd.add_argument("--ramps", type=Path, help="JSON object of material names to dark-to-light HEX arrays.")
+        cmd.set_defaults(run=color_candidate, suggest=suggest)
+
     cmd = commands.add_parser("validate", help="Check raw PNGs.")
     cmd.add_argument("png", type=Path, nargs="+")
     cmd.add_argument("--kind", choices=PROFILES)
@@ -517,6 +690,8 @@ def main():
     cmd.add_argument("frames", type=Path)
     cmd.add_argument("out", type=Path)
     cmd.add_argument("--face-box", type=nonnegative, nargs=4, metavar=("X", "Y", "W", "H"))
+    cmd.add_argument("--color-profile", type=Path, help="Add character color-style diagnostics to the report.")
+    cmd.add_argument("--color-ignore", action="append", default=[], help="Exclude an effect HEX from color diagnostics.")
     cmd.set_defaults(run=review)
 
     cmd = commands.add_parser("review-transitions", help="Check frame boundaries from an animation state map.")
