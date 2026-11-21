@@ -2,12 +2,12 @@
 
 - 첫 요청 인터뷰에서 캐릭터 프레임 선택지를 설명하고 하나를 고른다. `lock-character-frame`으로 저장한 크기와 발 피벗을 모든 캐릭터의 작업 명세, 생성 프롬프트와 검수에 적용한다. 이후 같은 프로젝트에서 캐릭터마다 다른 크기를 사용하거나 확정된 크기를 바꾸지 않는다.
 
-- 이미지 생성 요청을 받으면 먼저 `project/game/art-direction.md`를 확인한다. 파일이 없거나 상태가 초안이면 [첫 요청 인터뷰](plugins/pixel-art-production/references/pipeline.md#첫-요청-인터뷰)로 시작한다. 사용자가 이미 준 답은 다시 묻지 않는다. 합의된 내용으로 프로젝트 설정을 저장한 뒤 요청한 에셋을 이어서 만든다.
+- 이미지 생성 요청을 받으면 먼저 [게임 아트 작업 폴더](plugins/pixel-art-production/references/pipeline.md#게임-아트-작업-폴더)를 정하고 그곳의 `art-direction.md`를 확인한다. 파일이 없거나 상태가 초안이면 [첫 요청 인터뷰](plugins/pixel-art-production/references/pipeline.md#첫-요청-인터뷰)로 시작한다. 사용자가 이미 준 답은 다시 묻지 않는다. 합의된 내용으로 프로젝트 설정을 저장한 뒤 요청한 에셋을 이어서 만든다.
 - 기존 게임이면 아트 방향, 팔레트, 해당 에셋 작업 명세와 승인 레퍼런스를 읽는다. 게임 전체의 톤·팔레트 변경은 [아트 방향 변경](plugins/pixel-art-production/references/pipeline.md#아트-방향-변경) 절차로 처리한다.
 - 원하는 색감이 담긴 PNG가 있으면 [PNG 레퍼런스 색감 선정](plugins/pixel-art-production/references/color-style.md)으로 관심 영역과 재질 명암색을 고른다. 캐릭터 작업은 게임의 색감 프로파일이 있으면 생성 전에 가이드를 읽고 작업 명세·프롬프트에 반영한다. 생성 후에는 같은 프로파일로 색감 편차를 확인한다.
 - 새 그림과 부분 편집은 세션의 이미지 생성 도구를 사용한다. 같은 방향의 승인 포즈, 팔레트 견본과 허용 HEX를 입력에 포함한다. 생성 도구가 없으면 프로젝트 설정과 프롬프트를 준비하고, 가져온 PNG로 이어서 작업한다.
 - [검수 절차](plugins/pixel-art-production/references/pipeline.md#검수와-시트-조립)에 따라 입력 형태에 맞는 Python 명령을 직접 호출한다. 격자, 알파, 피벗과 허용 색을 검사하고 실패 원인을 수정한 뒤 다시 검사한다. 새 색을 게임 팔레트에 넣는 결정은 아트 방향 변경으로 다룬다.
 - UI 변경은 [UI 실루엣과 화면 배율 검수](plugins/pixel-art-production/references/pipeline.md#ui-실루엣과-화면-배율-검수)에 따라 레퍼런스의 형태와 게임 화면에서의 크기·역할을 함께 확인한다.
 - 캐릭터 애니메이션을 만들거나 수정할 때 [상태 전환 검수](plugins/pixel-art-production/references/pipeline.md#상태-전환-검수)에 따라 영향받는 연결을 상태 전환 맵에 기록하고 Python 검사를 실행한다. 사용자 피드백이나 미리보기만으로 출발 상태, 도착 상태 또는 실제 경계 프레임을 알기 어려우면 사용자에게 확인한다.
-- 원본·프롬프트·검수 결과와 승인 PNG를 `project/game/`에 저장한다. 단일 프레임은 검수된 PNG를 사용하고, 시트가 필요하면 CLI로 조립한다. 기본 산출물은 PNG다. Unity 설정이나 임포터 설치는 사용자가 요청한 경우에 진행한다.
-- 공용 개선은 `plugins/pixel-art-production/`, `docs/`, 이 파일 등 공용 경로에 반영한다. 게임별 작업물과 설정은 `project/`에 둔다.
+- 원본·프롬프트·검수 결과와 승인 PNG를 선택한 게임 아트 작업 폴더에 저장한다. 단일 프레임은 검수된 PNG를 사용하고, 시트가 필요하면 CLI로 조립한다. 기본 산출물은 PNG다. Unity 설정이나 임포터 설치는 사용자가 요청한 경우에 진행한다.
+- 공용 개선은 `plugins/pixel-art-production/`, `docs/`, 이 파일 등 공용 경로에 반영한다. 게임별 작업물과 설정은 플러그인 저장소 밖에서 해당 게임과 함께 관리한다.

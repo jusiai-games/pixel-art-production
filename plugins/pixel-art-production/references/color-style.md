@@ -2,13 +2,13 @@
 
 ## 참고할 색 고르기
 
-1. 마음에 드는 PNG를 `project/game/references/`에 두고 출처와 참고할 부분을 기록한다. 예를 들어 슬라임 몸체의 광택이나 마법사 로브의 명암을 고른다. 캐릭터가 분리돼 있으면 전체 프레임을, 시트나 장면이라면 `--crop X Y W H`로 원하는 영역을 선택한다.
+1. 마음에 드는 PNG를 [게임 아트 작업 폴더](pipeline.md#게임-아트-작업-폴더)의 `references/`에 두고 출처와 참고할 부분을 기록한다. 예를 들어 슬라임 몸체의 광택이나 마법사 로브의 명암을 고른다. 캐릭터가 분리돼 있으면 전체 프레임을, 시트나 장면이라면 `--crop X Y W H`로 원하는 영역을 선택한다.
 2. `color-scan`이 만든 `selection.png`와 `swatches.png`를 함께 본다. `report.json`에서 불투명 HEX별 빈도와 OKLCH 값을 확인한다. 픽셀 수가 적어도 의도한 하이라이트는 명암색으로 선택한다. 배경이나 효과를 빼려면 영역을 다시 잡거나 몸체와 겹치지 않는 HEX를 `ignoreColors`에 적는다.
 3. 서로 다른 캐릭터와 색조에서 대표 포즈 한 장씩을 골라 `color-sources.json`에 등록한다. 같은 재질의 그림자부터 하이라이트까지 밝기 순서로 3색 이상을 `ramps`에 적는다. 가운데 색을 기준색으로 사용하며, 짝수 개면 가운데 두 색 중 밝은 쪽을 사용한다.
 
 ```powershell
 $tool = '<플러그인 루트>/scripts/pixel-art/pixel_art.py'
-$game = 'project/game'
+$game = 'C:/path/to/game/pixel-art'
 & $py $tool color-scan "$game/references/reference.png" "$game/work/reference-scan" --crop 0 0 32 32
 & $py $tool color-build "$game/references/color-sources.json" "$game/styles/reference-colors-v1"
 ```

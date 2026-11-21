@@ -2,7 +2,13 @@
 
 ## CLI 실행
 
-플러그인 루트의 `scripts/pixel-art/pixel_art.py`를 절대 경로로 실행한다. Python 3.10 이상과 같은 폴더의 `requirements.txt`를 사용한다. 작업 디렉터리는 게임 저장소로 두고, 게임 데이터는 해당 저장소의 `project/game/` 또는 요청에 명시된 게임 폴더에 저장한다.
+플러그인 루트의 `scripts/pixel-art/pixel_art.py`를 절대 경로로 실행한다. Python 3.10 이상과 같은 폴더의 `requirements.txt`를 사용한다. 작업 명령은 게임 작업 공간에서 실행한다. 아래 예시의 `$game`은 선택한 게임 아트 작업 폴더를 가리킨다.
+
+## 게임 아트 작업 폴더
+
+1. 사용자가 경로를 지정하면 그 위치를 사용한다. 기존 게임에는 `art-direction.md`와 팔레트가 있는 아트 작업 폴더를 우선 재사용한다.
+2. 새 작업은 게임의 기존 파일 구조에 맞는 아트 폴더를 정한다. 게임 저장소가 아직 없으면 플러그인 저장소와 설치 경로 밖의 쓰기 가능한 작업 공간에 게임별 폴더를 만든다.
+3. 아트 방향, 레퍼런스, 원본, 프롬프트, 검수 결과와 승인 PNG의 경로는 선택한 폴더를 기준으로 관리한다.
 
 ## 첫 요청 인터뷰
 
@@ -28,7 +34,7 @@ AI는 아트 방향 파일이 없거나 상태가 `초안`인 게임의 첫 이�
 
 ### 인터뷰 결과 저장
 
-1. `project/game/`이 없으면 AI가 Python 3.10 이상과 플러그인 `scripts/pixel-art/requirements.txt`의 의존성을 설치하고 `init project/game`을 실행한다. 기존 폴더가 있으면 내용을 이어서 채운다. 프로젝트 이름은 `art-direction.md`에 기록한다.
+1. 선택한 폴더가 아직 없으면 `init "$game"`으로 초기화한다. 기존 폴더가 있으면 기존 설정과 에셋을 읽고 필요한 항목을 채운다. 프로젝트 이름은 `art-direction.md`에 기록한다.
 2. `art-direction.md`에 콘셉트, 카메라, 톤, 조명, 대비, 역할별 색과 기본 배율에서 읽혀야 하는 요소를 기록한다. 첫 에셋에 필요한 방향을 합의하면 상태를 `확정`으로 표시한다. 화면에서의 크기와 배경 대비처럼 실제 플레이로 판단할 내용은 확인할 가정으로 남긴다.
 3. 합의한 HEX로 `palettes/project.json`의 예시 색을 교체한다. 재질별 색 램프와 검사 가능한 조명·외곽선 기준은 `styles/default.json`에 기록한다. 역할별 색 제한이 필요하면 팔레트 파일을 추가하고 해당 매니페스트에 연결한다.
 4. 첨부된 레퍼런스를 `references/`에 저장하고 출처와 참고할 요소를 기록한다. 팔레트 견본을 만든다. 첫 제작에서 승인한 포즈와 대표 장면은 이후 작업의 기준 레퍼런스로 추가한다.
@@ -37,7 +43,7 @@ AI는 아트 방향 파일이 없거나 상태가 `초안`인 게임의 첫 이�
 
 ```powershell
 $tool = '<플러그인 루트>/scripts/pixel-art/pixel_art.py'
-$game = 'project/game'
+$game = 'C:/path/to/game/pixel-art'
 & $py $tool swatch "$game/palettes/project.json" "$game/references/palette-v1.png"
 ```
 
