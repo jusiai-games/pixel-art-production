@@ -93,19 +93,25 @@ def load_png(path):
             return png.convert("RGBA")
 
 
-def check(image, label, kind=None, colors=None, size=None):
+def check(image, label, kind=None, colors=None, size=None, *, soft_alpha=False):
     if size and image.size != size:
         raise ValueError(f"{label}: expected {size}, got {image.size}")
     alpha = image.getchannel("A")
     histogram = alpha.histogram()
-    if sum(histogram[1:255]):
+    if not soft_alpha and sum(histogram[1:255]):
         raise ValueError(f"{label}: alpha must be 0 or 255")
-    if not histogram[255]:
+    if not any(histogram[1:]):
         raise ValueError(f"{label}: no visible pixels")
     if kind == "character" and not histogram[0]:
         raise ValueError(f"{label}: character needs transparent background")
     if colors is not None:
-        visible_colors = canonical(image).getcolors(maxcolors=65536)
+        if soft_alpha:
+            # Palette entries describe RGB, independent of opacity.
+            visible = Image.new("RGBA", image.size)
+            visible.paste(image.convert("RGB"), mask=alpha.point([0] + [255] * 255))
+        else:
+            visible = canonical(image)
+        visible_colors = visible.getcolors(maxcolors=65536)
         if visible_colors is None:
             raise ValueError(f"{label}: too many visible colors for the palette")
         invalid = {(r, g, b) for _, (r, g, b, a) in visible_colors if a} - colors
@@ -561,6 +567,36 @@ def review_transitions(args):
         raise SystemExit(1)
 
 
+def compose(args):
+    colors = palette(args.palette) if args.palette else None
+    first = load_png(args.png[0])
+    width, height = first.size
+    columns = args.columns or len(args.png)
+    rows = (len(args.png) + columns - 1) // columns
+    if args.mode == "repeat":
+        if len(args.png) != 1:
+            raise ValueError("repeat expects one PNG")
+        columns, rows = args.repeat
+    elif args.mode == "layers":
+        columns = rows = 1
+    size = width * columns, height * rows
+    if size[0] * size[1] > MAX_SOURCE_PIXELS:
+        raise ValueError("composition exceeds the source pixel limit")
+    canvas = Image.new("RGBA", size)
+    for index, path in enumerate(args.png):
+        frame = first if index == 0 else load_png(path)
+        check(frame, path, colors=colors, size=first.size, soft_alpha=args.soft_alpha)
+        if args.mode == "repeat":
+            for y in range(rows):
+                for x in range(columns):
+                    canvas.paste(frame, (x * width, y * height))
+        elif args.mode == "layers":
+            canvas.alpha_composite(frame)
+        else:
+            canvas.paste(frame, (index % columns * width, index // columns * height))
+    write_frame(canvas, args.out)
+
+
 def assemble(args):
     kind, name, cell, pivot, columns, rows, names, colors = manifest(args.manifest, args.frames, args.out)
     check_frame_files(args.frames, names)
@@ -603,8 +639,22 @@ def positive(value):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Validate and build pixel-art sheets for Unity.")
+    parser = argparse.ArgumentParser(description="Validate, compose, and export pixel-art PNGs.")
     commands = parser.add_subparsers(required=True)
+    layouts = commands.add_parser("compose", help="Compose approved PNGs at native resolution.")
+    modes = layouts.add_subparsers(dest="mode", required=True)
+    for mode in ("sheet", "repeat", "layers"):
+        layout = modes.add_parser(mode)
+        layout.add_argument("out", type=Path)
+        layout.add_argument("png", nargs="+", type=Path)
+        layout.add_argument("--palette", type=Path)
+        layout.add_argument("--soft-alpha", action="store_true", help="Allow translucent artwork.")
+        layout.set_defaults(run=compose, columns=None)
+        if mode == "sheet":
+            layout.add_argument("--columns", type=positive)
+        if mode == "repeat":
+            layout.add_argument("--repeat", nargs=2, type=positive, default=(3, 3))
+
     cmd = commands.add_parser("init", help="Create a local game workspace from templates.")
     cmd.add_argument("directory", type=Path)
     cmd.set_defaults(run=init_project)

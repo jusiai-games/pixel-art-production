@@ -43,7 +43,7 @@ PNG는 sRGB로 내보낸다. PNG 경로는 설정 파일 기준이다. `crop`, `
 ```powershell
 $profile = "$game/styles/reference-colors-v1/profile.json"
 & $py $tool color-ramp $profile "$game/work/purple-slime-ramp" `
-  --reference meadow_slime --material gel --base '#916EAD'
+  --reference sample_slime --material gel --base '#916EAD'
 ```
 
 ## 후보 비교와 보정
