@@ -1,1 +1,1 @@
-Pillow>=12,<14
+-r ../../plugins/pixel-art-production/scripts/pixel-art/requirements.txt

@@ -12,7 +12,7 @@ git pull --ff-only
 
 | 위치 | 버전 관리 |
 | --- | --- |
-| `AGENTS.md`, `CLAUDE.md`, `docs/`, `tools/`, `unity/` | 공용 도구 원격 |
+| `AGENTS.md`, `CLAUDE.md`, `docs/`, `plugins/`, `tools/`, `.agents/plugins/`, `.codex/config.toml`, `unity/` | 공용 도구 원격 |
 | `project/game/` | 클론 로컬. 레퍼런스·생성물·팔레트·매니페스트·프롬프트와 승인 이력을 함께 백업 |
 | Unity에 반영한 PNG, `.sprite.json`, `.meta` | 게임의 Unity 저장소에서 함께 추적 |
 

@@ -1,0 +1,12 @@
+{
+  "name": "pixel-art-production",
+  "version": "0.1.0",
+  "description": "Game pixel art production workflows and PNG tools.",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Pixel Art Production",
+    "shortDescription": "Create and validate game pixel art",
+    "longDescription": "Create characters, tiles, backgrounds, cards, UI and spell effects using game-specific art direction and shared PNG tools.",
+    "category": "Design"
+  }
+}

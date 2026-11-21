@@ -1,27 +1,39 @@
 # Pixel Art Production
 
-게임마다 클론해서 쓰는 픽셀 아트 제작 도구다. ChatGPT Work, Codex 또는 Claude Code에서 이 폴더를 열고 “마법사 스프라이트를 만들어줘”라고 요청하면 [첫 요청 인터뷰](docs/pipeline.md#첫-요청-인터뷰)에서 캐릭터 프레임을 정한다. 자동으로 지침을 읽지 않는 환경에서는 `AGENTS.md`를 먼저 읽으라고 요청한다.
+게임별 아트 방향과 팔레트를 적용해 픽셀 아트 PNG를 제작하고 검수하는 Codex 플러그인이다. 게임 데이터는 작업 중인 저장소의 `project/game/`에 둔다.
 
-이미지 생성 도구와 Python으로 PNG를 만든다. Unity 자동 분할이 필요할 때는 [Unity 임포터](docs/unity-import.md)를 게임 프로젝트에 추가할 수 있다.
+## Codex에서 사용하기
 
-아래는 Python 환경과 게임 작업 폴더를 터미널에서 직접 준비할 때 쓰는 명령이다.
+1. 이 저장소를 신뢰된 프로젝트로 연다. 로컬 마켓플레이스는 `.agents/plugins/marketplace.json`에 있고 프로젝트 설정에서 `pixel-art-production@pixel-art-local`을 활성화한다.
+2. Codex에서 플러그인을 새로 읽은 뒤 **Pixel Art Production**을 선택하고 요청한다. 스킬 이름으로 작업을 지정할 수도 있다.
+
+| 스킬 | 요청 예시 |
+| --- | --- |
+| `character-sprites` | 승인된 마법사 오른쪽 포즈로 이동 애니메이션을 만들어줘 |
+| `environment-art` | 초원 타일맵과 패럴랙스 배경을 만들어줘 |
+| `pixel-ui` | 기본 전투 화면에 맞는 양피지 주문 카드를 만들어줘 |
+| `spell-effects` | 메테오 충돌을 주문별 투명 PNG 시트와 GIF로 만들어줘 |
+| `color-style` | 슬라임의 초록 명암을 보라색 팔레트로 옮겨줘 |
+
+다른 저장소에서 쓰려면 `plugins/pixel-art-production/` 폴더 전체를 로컬 마켓플레이스에 등록한다. 설치된 플러그인의 스킬은 배포 폴더에 포함된 스크립트와 문서를 읽고, 작업 중인 게임 저장소에 결과를 기록한다. 이미지 생성에는 세션에서 제공하는 이미지 생성 도구가 필요하다.
+
+## Python CLI
+
+저장소 루트에서 실행한다. 새 게임만 `init`으로 초기화한다.
 
 ```powershell
 py -3 -m venv .venv
 $py = './.venv/Scripts/python.exe'
-& $py -m pip install -r tools/pixel-art/requirements.txt
-& $py tools/pixel-art/pixel_art.py init project/game
+$plugin = './plugins/pixel-art-production'
+& $py -m pip install -r "$plugin/scripts/pixel-art/requirements.txt"
+& $py "$plugin/scripts/pixel-art/pixel_art.py" --help
+& $py "$plugin/scripts/pixel-art/pixel_art.py" init project/game
 ```
 
-Python 3.10 이상이 필요하다. macOS/Linux에서는 `python3 -m venv .venv`와 `./.venv/bin/python`을 사용한다.
+Python 3.10 이상이 필요하다. macOS/Linux에서는 `python3 -m venv .venv`와 `./.venv/bin/python`을 사용한다. 기존 `tools/pixel-art/pixel_art.py`와 의존성 경로도 사용할 수 있다. 플러그인을 지원하지 않는 환경에서는 `AGENTS.md`와 아래 제작 절차를 사용한다.
 
-- [첫 인터뷰부터 PNG 완성까지](docs/pipeline.md)
-- [PNG 레퍼런스에서 색감을 골라 캐릭터 생성에 적용하기](docs/color-style.md)
-- [AI 작업 지침](AGENTS.md)
+- [첫 인터뷰부터 PNG 검수까지](plugins/pixel-art-production/references/pipeline.md)
+- [PNG 레퍼런스로 색감 정리하기](plugins/pixel-art-production/references/color-style.md)
+- [Unity 임포터](docs/unity-import.md)
 - [클론 운영과 공용 도구 업데이트](docs/git-workflow.md)
-
-| 경로 | 내용 |
-| --- | --- |
-| `tools/pixel-art/` | 초기화, 색상 견본, 분리·정규화·검수·조립 CLI |
-| `unity/Assets/Editor/` | 선택 사항인 Unity 시트 임포터 |
-| `project/game/` | 이 클론의 아트 방향, 레퍼런스, 원본, 팔레트와 결과물 |
+- [Codex 로컬 플러그인 공식 문서](https://developers.openai.com/plugins/build/plugins)

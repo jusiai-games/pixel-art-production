@@ -7,7 +7,7 @@
 3. 서로 다른 캐릭터와 색조에서 대표 포즈 한 장씩을 골라 `color-sources.json`에 등록한다. 같은 재질의 그림자부터 하이라이트까지 밝기 순서로 3색 이상을 `ramps`에 적는다. 가운데 색을 기준색으로 사용하며, 짝수 개면 가운데 두 색 중 밝은 쪽을 사용한다.
 
 ```powershell
-$tool = 'tools/pixel-art/pixel_art.py'
+$tool = '<플러그인 루트>/scripts/pixel-art/pixel_art.py'
 $game = 'project/game'
 & $py $tool color-scan "$game/references/reference.png" "$game/work/reference-scan" --crop 0 0 32 32
 & $py $tool color-build "$game/references/color-sources.json" "$game/styles/reference-colors-v1"
