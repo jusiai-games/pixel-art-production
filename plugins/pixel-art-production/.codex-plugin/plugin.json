@@ -1,6 +1,6 @@
 {
   "name": "pixel-art-production",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Game pixel art production workflows and PNG tools.",
   "skills": "./skills/",
   "interface": {
