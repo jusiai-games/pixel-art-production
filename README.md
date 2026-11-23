@@ -34,7 +34,6 @@ $game = 'C:/path/to/game/pixel-art'
 Python 3.10 이상이 필요하다. macOS/Linux에서는 `python3 -m venv .venv`와 `./.venv/bin/python`을 사용한다. 기존 `tools/pixel-art/pixel_art.py`와 의존성 경로도 사용할 수 있다. 플러그인을 지원하지 않는 환경에서는 `AGENTS.md`와 아래 제작 절차를 사용한다.
 
 - [첫 인터뷰부터 PNG 검수까지](plugins/pixel-art-production/references/pipeline.md)
-- [캐릭터 동작 제작과 재생 검수](plugins/pixel-art-production/references/character-motion.md)
 - [PNG 레퍼런스로 색감 정리하기](plugins/pixel-art-production/references/color-style.md)
 - [Unity 임포터](docs/unity-import.md)
 - [플러그인과 게임 아트 관리](docs/git-workflow.md)

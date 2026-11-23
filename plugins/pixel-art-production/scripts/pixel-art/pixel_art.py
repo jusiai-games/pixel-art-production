@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageDraw
 import color_style
 from style_review import load_style, review_frame, rgb, write_face_preview, write_preview
 from transition_review import compare_transition, transition_limits, transition_preview
@@ -624,45 +624,6 @@ def assemble(args):
     print(f"{args.out / png.name}: {width}x{height}, {len(sprites)} sprites")
 
 
-def preview_motion(args):
-    if len(args.png) < 2 or len(args.png) != len(args.durations):
-        raise ValueError("provide at least two PNGs and one duration per PNG")
-    if sum(args.durations) > 65535:
-        raise ValueError("total preview duration must be at most 65535 ms")
-    cell, _ = profile("character", args.palette, args.out, *args.png)
-    colors = palette(args.palette)
-    frames = []
-    holds = []
-    for index, path in enumerate(args.png):
-        frame = load_png(path)
-        check(frame, path, "character", colors, (cell, cell))
-        frame = canonical(frame)
-        if frames and ImageChops.difference(frames[-1], frame).getbbox(alpha_only=False) is None:
-            holds.append([index, index + 1])
-        frames.append(frame)
-    if args.loop and ImageChops.difference(frames[-1], frames[0]).getbbox(alpha_only=False) is None:
-        holds.append([len(frames), 1])
-
-    with new_directory(args.out) as stage:
-        for scale in (1, 4):
-            size = (cell * scale, cell * scale)
-            display = [frame.resize(size, Image.Resampling.NEAREST) for frame in frames]
-            display[0].save(
-                stage / f"motion-{scale}x.png", save_all=True, append_images=display[1:],
-                duration=args.durations, loop=0 if args.loop else 1,
-            )
-        report = {
-            "loop": args.loop,
-            "frames": [
-                {"png": str(path), "duration_ms": duration}
-                for path, duration in zip(args.png, args.durations)
-            ],
-            "identical_pairs_1_based": holds,
-        }
-        (stage / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print(f"{args.out}: {len(frames)} frames, {sum(args.durations)} ms, {len(holds)} identical pairs")
-
-
 def nonnegative(value):
     number = int(value)
     if number < 0:
@@ -787,14 +748,6 @@ def main():
     cmd.add_argument("map", type=Path)
     cmd.add_argument("out", type=Path)
     cmd.set_defaults(run=review_transitions)
-
-    cmd = commands.add_parser("preview-motion", help="Play checked character PNGs at their planned timings.")
-    cmd.add_argument("palette", type=Path)
-    cmd.add_argument("out", type=Path)
-    cmd.add_argument("png", type=Path, nargs="+", help="Static PNGs in playback order.")
-    cmd.add_argument("--durations", type=positive, nargs="+", required=True, help="One duration in ms per PNG.")
-    cmd.add_argument("--loop", action="store_true", help="Repeat playback and check the last-to-first pair.")
-    cmd.set_defaults(run=preview_motion)
 
     cmd = commands.add_parser("assemble", help="Build a sheet and Unity metadata.")
     cmd.add_argument("manifest", type=Path)
